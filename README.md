@@ -1,5 +1,10 @@
 # Gestor de Préstamos - Sistema de Control de Cobros
 
+[![GitHub license](https://img.shields.io/github/license/Diego-Campo/Gestor-de-prestamos)](https://github.com/Diego-Campo/Gestor-de-prestamos/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/Diego-Campo/Gestor-de-prestamos)](https://github.com/Diego-Campo/Gestor-de-prestamos/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/Diego-Campo/Gestor-de-prestamos)](https://github.com/Diego-Campo/Gestor-de-prestamos/issues)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
 Sistema profesional para la gestión y control de cobros de préstamos, diseñado para facilitar el trabajo de cobradores y administradores.
 
 ## Características
@@ -192,11 +197,12 @@ Los siguientes usuarios están disponibles para pruebas:
 ### Pantalla de Login
 ![Login](assets/screenshots/login.png)
 
-### Dashboard Principal
-![Dashboard](assets/screenshots/dashboard.png)
+### Registro cliente nuevo
+![Dashboard](assets/screenshots/registro-cliente.png)
 
 ### Gestión de Clientes
 ![Clientes](assets/screenshots/clientes.png)
+
 
 ## Características Técnicas
 
@@ -257,8 +263,9 @@ Para sugerir nuevas funcionalidades:
 Este proyecto está licenciado bajo la **MIT License** - ver el archivo [LICENSE](LICENSE) para detalles.
 
 ### Desarrollado por
-- **Equipo de Desarrollo**
-- Con ❤️ para mejorar la gestión de préstamos
+- **Diego Campo**
+- GitHub: [@Diego-Campo](https://github.com/Diego-Campo)
+- Email: campoviverodiego@gmail.com
 
 ### Agradecimientos
 - Comunidad de PyQt6 por la excelente documentación
@@ -269,4 +276,6 @@ Este proyecto está licenciado bajo la **MIT License** - ver el archivo [LICENSE
 
 **⭐ Si este proyecto te es útil, considera darle una estrella en GitHub**
 
-**📧 Para soporte empresarial o consultorías, contacta al equipo de desarrollo**
+**📧 Contacto: campoviverodiego@gmail.com**
+
+**🔗 Repositorio: [github.com/Diego-Campo/Gestor-de-prestamos](https://github.com/Diego-Campo/Gestor-de-prestamos)**

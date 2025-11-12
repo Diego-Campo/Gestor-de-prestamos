@@ -66,8 +66,8 @@ Buscamos ayuda en las siguientes áreas:
 1. **Fork del Repositorio**
    ```bash
    # Hacer fork en GitHub y luego clonar
-   git clone https://github.com/TU_USUARIO/gestor-prestamos.git
-   cd gestor-prestamos
+   git clone https://github.com/TU_USUARIO/Gestor-de-prestamos.git
+   cd Gestor-de-prestamos
    ```
 
 2. **Configurar Entorno Virtual**
@@ -85,7 +85,7 @@ Buscamos ayuda en las siguientes áreas:
 
 4. **Configurar Git**
    ```bash
-   git remote add upstream https://github.com/ORIGINAL_REPO/gestor-prestamos.git
+   git remote add upstream https://github.com/Diego-Campo/Gestor-de-prestamos.git
    git config user.name "Tu Nombre"
    git config user.email "tu.email@ejemplo.com"
    ```

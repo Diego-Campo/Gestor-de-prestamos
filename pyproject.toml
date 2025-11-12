@@ -9,7 +9,7 @@ description = "Sistema de Gestión y Control de Préstamos"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Equipo de Desarrollo", email = "desarrollo@gestorprestamos.com"}
+    {name = "Diego Campo", email = "campoviverodiego@gmail.com"}
 ]
 keywords = ["cobros", "préstamos", "gestión", "PyQt6", "SQLite"]
 classifiers = [
@@ -49,11 +49,11 @@ build = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/gestor-prestamos/sistema-prestamos"
-Documentation = "https://github.com/gestor-prestamos/sistema-prestamos/blob/main/README.md"
-Repository = "https://github.com/gestor-prestamos/sistema-prestamos"
-"Bug Tracker" = "https://github.com/gestor-prestamos/sistema-prestamos/issues"
-Changelog = "https://github.com/gestor-prestamos/sistema-prestamos/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Diego-Campo/Gestor-de-prestamos"
+Documentation = "https://github.com/Diego-Campo/Gestor-de-prestamos/blob/main/README.md"
+Repository = "https://github.com/Diego-Campo/Gestor-de-prestamos"
+"Bug Tracker" = "https://github.com/Diego-Campo/Gestor-de-prestamos/issues"
+Changelog = "https://github.com/Diego-Campo/Gestor-de-prestamos/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]

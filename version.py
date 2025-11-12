@@ -2,11 +2,11 @@
 __version__ = "1.0.0"
 __app_name__ = "Gestor de Préstamos"
 __description__ = "Sistema de Gestión y Control de Préstamos"
-__author__ = "Equipo de Desarrollo"
-__email__ = "desarrollo@gestorprestamos.com"
-__url__ = "https://github.com/gestor-prestamos/sistema-prestamos"
+__author__ = "Diego Campo"
+__email__ = "campoviverodiego@gmail.com"
+__url__ = "https://github.com/Diego-Campo/Gestor-de-prestamos"
 __license__ = "MIT"
-
+  
 # Información de build
 __build_date__ = "2024-11-11"
 __python_version__ = "3.8+"
