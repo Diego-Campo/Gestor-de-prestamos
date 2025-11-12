@@ -6,7 +6,7 @@ necesarias con la base de datos. Es el archivo que debe ejecutarse
 para iniciar la aplicación.
 
 Versión: 1.0.0
-Autor: Equipo de Desarrollo
+Autor: Diego Campo
 Licencia: MIT
 """
 
