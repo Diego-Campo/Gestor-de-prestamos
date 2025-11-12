@@ -1,0 +1,6 @@
+# Dependencias de la aplicación Gestor de Préstamos
+# Para instalar todas las dependencias ejecutar: pip install -r requirements.txt
+
+PyQt6>=6.5.0
+bcrypt>=4.0.0
+python-dotenv>=1.0.0
