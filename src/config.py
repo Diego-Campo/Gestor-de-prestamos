@@ -14,9 +14,14 @@ APP_NAME = "Gestor de Préstamos"
 APP_VERSION = "1.0.0"
 APP_DESCRIPTION = "Sistema de Gestión y Control de Préstamos"
 
-# Configuración de la base de datos
-DB_NAME = "gestor_prestamos.db"
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_NAME)
+# Configuración de la base de datos PostgreSQL
+DB_CONFIG = {
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': int(os.getenv('DB_PORT', '5432')),
+    'database': os.getenv('DB_NAME', 'gestor_prestamos'),
+    'user': os.getenv('DB_USER', 'postgres'),
+    'password': os.getenv('DB_PASSWORD', 'postgres')
+}
 
 # Configuración de negocio
 class BusinessConfig:

@@ -4,32 +4,40 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gestor-prestamos"
-version = "1.0.0"
-description = "Sistema de Gestión y Control de Préstamos"
+version = "2.0.0"
+description = "Sistema Multi-plataforma de Gestión y Control de Préstamos (Android/Windows)"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "Diego Campo", email = "campoviverodiego@gmail.com"}
 ]
-keywords = ["cobros", "préstamos", "gestión", "PyQt6", "SQLite"]
+keywords = ["cobros", "préstamos", "gestión", "kivy", "fastapi", "postgresql", "android"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: Android",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Topic :: Office/Business :: Financial",
-    "Topic :: Database :: Front-Ends"
+    "Framework :: FastAPI",
+    "Framework :: Kivy"
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
-    "PyQt6>=6.5.0",
+    "kivy>=2.2.0",
+    "kivymd>=1.1.1",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "psycopg2-binary>=2.9.0",
+    "python-jose[cryptography]>=3.3.0",
     "bcrypt>=4.0.0",
-    "python-dotenv>=1.0.0"
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "pydantic>=2.0.0"
 ]
 
 [project.optional-dependencies]

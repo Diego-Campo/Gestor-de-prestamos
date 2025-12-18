@@ -1,5 +1,13 @@
+"""
+Gestión de clientes y préstamos para PostgreSQL.
+
+Este módulo ha sido adaptado para funcionar con PostgreSQL
+en lugar de SQLite. Los métodos han sido refactorizados para
+usar psycopg2 y el pool de conexiones.
+"""
+
 from datetime import datetime
-from typing import List, Tuple, Optional, Union
+from typing import List, Dict, Optional
 
 class Cliente:
     """
@@ -17,7 +25,7 @@ class Cliente:
         Inicializa el gestor de clientes.
         
         Args:
-            db: Instancia de la clase Database para operaciones con la base de datos
+            db: Instancia de la clase Database (PostgreSQL) para operaciones con la base de datos
         """
         self.db = db
 
@@ -81,27 +89,42 @@ class Cliente:
         # El monto real que recibe el cliente es el monto solicitado menos el seguro
         monto_real = monto - seguro
         
-        self.db.cursor.execute('''
+        # Insertar cliente y obtener ID
+        result = self.db.fetch_one('''
             INSERT INTO clientes (
                 usuario_id, nombre, cedula, telefono, monto_prestado, 
                 fecha_prestamo, tipo_plazo, tasa_interes, seguro, 
-                cuota_minima, dias_plazo
+                cuota_minima, dias_plazo, estado
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         ''', (usuario_id, nombre, cedula, telefono, monto_real, fecha, 
-              tipo_plazo, tasa_interes, seguro, cuota_minima, dias_plazo))
-        self.db.connection.commit()
-        return self.db.cursor.lastrowid
+              tipo_plazo, tasa_interes, seguro, cuota_minima, dias_plazo, 'activo'))
+        
+        return result['id']
 
-    def registrar_pago(self, cliente_id, monto, tipo_pago):
+    def registrar_pago(self, cliente_id: int, monto: float, tipo_pago: str) -> int:
+        """
+        Registra un pago realizado por un cliente.
+        
+        Args:
+            cliente_id: ID del cliente
+            monto: Monto del pago
+            tipo_pago: Tipo de pago ('efectivo' o 'digital')
+            
+        Returns:
+            int: ID del pago registrado
+        """
         fecha = datetime.now().date()
-        self.db.cursor.execute('''
+        result = self.db.fetch_one('''
             INSERT INTO pagos (cliente_id, fecha, monto, tipo_pago)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
         ''', (cliente_id, fecha, monto, tipo_pago))
-        self.db.connection.commit()
+        
+        return result['id']
 
-    def obtener_clientes(self, usuario_id):
+    def obtener_clientes(self, usuario_id: int) -> List[Dict]:
         """
         Obtiene la lista de clientes activos para un cobrador.
         
@@ -109,51 +132,122 @@ class Cliente:
             usuario_id: ID del cobrador
             
         Returns:
-            List[Tuple]: Lista de tuplas con los datos de los clientes:
-                (id, nombre, cedula, telefono, monto_prestado, fecha_prestamo, 
-                tipo_plazo, tasa_interes, seguro, cuota_minima, dias_plazo)
+            List[Dict]: Lista de diccionarios con los datos de los clientes
         """
-        self.db.cursor.execute('''
+        clientes = self.db.fetch_all('''
             SELECT id, nombre, cedula, telefono, monto_prestado, fecha_prestamo, 
-                   tipo_plazo, tasa_interes, seguro, cuota_minima, dias_plazo
+                   tipo_plazo, tasa_interes, seguro, cuota_minima, dias_plazo, estado
             FROM clientes
-            WHERE usuario_id = ? AND estado = 'activo'
+            WHERE usuario_id = %s AND estado = 'activo'
+            ORDER BY fecha_prestamo DESC
         ''', (usuario_id,))
-        return self.db.cursor.fetchall()
+        
+        return [dict(cliente) for cliente in clientes]
 
-    def obtener_historial_pagos(self, cliente_id):
-        self.db.cursor.execute('''
-            SELECT fecha, monto, tipo_pago
-            FROM pagos
-            WHERE cliente_id = ?
-            ORDER BY fecha DESC
+    def obtener_cliente_por_id(self, cliente_id: int) -> Optional[Dict]:
+        """
+        Obtiene la información completa de un cliente.
+        
+        Args:
+            cliente_id: ID del cliente
+            
+        Returns:
+            Optional[Dict]: Información del cliente o None si no existe
+        """
+        cliente = self.db.fetch_one('''
+            SELECT id, usuario_id, nombre, cedula, telefono, monto_prestado, 
+                   fecha_prestamo, tipo_plazo, tasa_interes, seguro, 
+                   cuota_minima, dias_plazo, estado
+            FROM clientes
+            WHERE id = %s
         ''', (cliente_id,))
-        return self.db.cursor.fetchall()
+        
+        return dict(cliente) if cliente else None
 
-    def calcular_balance(self, cliente_id):
+    def obtener_historial_pagos(self, cliente_id: int) -> List[Dict]:
+        """
+        Obtiene el historial de pagos de un cliente.
+        
+        Args:
+            cliente_id: ID del cliente
+            
+        Returns:
+            List[Dict]: Lista de pagos ordenados por fecha descendente
+        """
+        pagos = self.db.fetch_all('''
+            SELECT id, fecha, monto, tipo_pago
+            FROM pagos
+            WHERE cliente_id = %s
+            ORDER BY fecha DESC, id DESC
+        ''', (cliente_id,))
+        
+        return [dict(pago) for pago in pagos]
+
+    def calcular_balance(self, cliente_id: int) -> Dict:
+        """
+        Calcula el balance completo de un cliente.
+        
+        Args:
+            cliente_id: ID del cliente
+            
+        Returns:
+            Dict con información del balance (monto_total, total_pagado, saldo_pendiente, etc.)
+        """
         # Obtener información del cliente
-        self.db.cursor.execute('''
+        cliente = self.db.fetch_one('''
             SELECT monto_prestado, tasa_interes, seguro
             FROM clientes
-            WHERE id = ?
+            WHERE id = %s
         ''', (cliente_id,))
-        cliente = self.db.cursor.fetchone()
-        monto_prestado = cliente[0]
-        tasa_interes = cliente[1]
-        seguro = cliente[2]
+        
+        if not cliente:
+            return {}
+        
+        monto_prestado = float(cliente['monto_prestado'])
+        tasa_interes = float(cliente['tasa_interes'])
+        seguro = float(cliente['seguro'])
 
-        # Calcular monto total a pagar (incluyendo interés)
-        monto_total = monto_prestado * (1 + tasa_interes)
+        # Calcular monto total a pagar (monto + interés + seguro)
+        interes = monto_prestado * tasa_interes
+        monto_total = monto_prestado + interes + seguro
 
         # Obtener total pagado
-        self.db.cursor.execute('''
-            SELECT SUM(monto)
+        pagado_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(monto), 0) as total
             FROM pagos
-            WHERE cliente_id = ?
+            WHERE cliente_id = %s
         ''', (cliente_id,))
-        total_pagado = self.db.cursor.fetchone()[0] or 0
+        total_pagado = float(pagado_result['total']) if pagado_result else 0.0
 
-        return monto_total - total_pagado
+        saldo_pendiente = monto_total - total_pagado
+
+        return {
+            'monto_prestado': monto_prestado,
+            'interes': interes,
+            'seguro': seguro,
+            'monto_total': monto_total,
+            'total_pagado': total_pagado,
+            'saldo_pendiente': saldo_pendiente,
+            'porcentaje_pagado': (total_pagado / monto_total * 100) if monto_total > 0 else 0
+        }
+
+    def actualizar_estado_cliente(self, cliente_id: int, nuevo_estado: str) -> bool:
+        """
+        Actualiza el estado de un cliente.
+        
+        Args:
+            cliente_id: ID del cliente
+            nuevo_estado: Nuevo estado ('activo', 'pagado', 'atrasado', 'inactivo')
+            
+        Returns:
+            bool: True si se actualizó correctamente
+        """
+        self.db.execute('''
+            UPDATE clientes 
+            SET estado = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (nuevo_estado, cliente_id))
+        return True
 
     def eliminar_cliente(self, cliente_id: int) -> bool:
         """
@@ -168,14 +262,63 @@ class Cliente:
         """
         # Verificar si el cliente ha pagado completamente
         balance = self.calcular_balance(cliente_id)
-        if balance > 0:
+        if balance.get('saldo_pendiente', 0) > 0:
             return False
             
         # Marcar el cliente como inactivo
-        self.db.cursor.execute('''
-            UPDATE clientes 
-            SET estado = 'inactivo' 
-            WHERE id = ?
-        ''', (cliente_id,))
-        self.db.connection.commit()
-        return True
+        return self.actualizar_estado_cliente(cliente_id, 'inactivo')
+
+    def buscar_clientes(self, usuario_id: int, termino: str) -> List[Dict]:
+        """
+        Busca clientes por nombre, cédula o teléfono.
+        
+        Args:
+            usuario_id: ID del cobrador
+            termino: Término de búsqueda
+            
+        Returns:
+            List[Dict]: Lista de clientes que coinciden con la búsqueda
+        """
+        termino_busqueda = f'%{termino}%'
+        clientes = self.db.fetch_all('''
+            SELECT id, nombre, cedula, telefono, monto_prestado, fecha_prestamo, 
+                   tipo_plazo, tasa_interes, seguro, cuota_minima, dias_plazo, estado
+            FROM clientes
+            WHERE usuario_id = %s 
+            AND (nombre ILIKE %s OR cedula ILIKE %s OR telefono ILIKE %s)
+            ORDER BY fecha_prestamo DESC
+        ''', (usuario_id, termino_busqueda, termino_busqueda, termino_busqueda))
+        
+        return [dict(cliente) for cliente in clientes]
+
+    def obtener_estadisticas_cobrador(self, usuario_id: int) -> Dict:
+        """
+        Obtiene estadísticas generales del cobrador.
+        
+        Args:
+            usuario_id: ID del cobrador
+            
+        Returns:
+            Dict con estadísticas (total_clientes, monto_prestado_total, monto_cobrado, etc.)
+        """
+        # Clientes activos
+        clientes_result = self.db.fetch_one('''
+            SELECT COUNT(*) as total,
+                   COALESCE(SUM(monto_prestado), 0) as monto_total
+            FROM clientes
+            WHERE usuario_id = %s AND estado = 'activo'
+        ''', (usuario_id,))
+        
+        # Total cobrado (todos los tiempos)
+        cobrado_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(p.monto), 0) as total
+            FROM pagos p
+            JOIN clientes c ON p.cliente_id = c.id
+            WHERE c.usuario_id = %s
+        ''', (usuario_id,))
+        
+        return {
+            'total_clientes_activos': clientes_result['total'] if clientes_result else 0,
+            'monto_prestado_total': float(clientes_result['monto_total']) if clientes_result else 0.0,
+            'total_cobrado': float(cobrado_result['total']) if cobrado_result else 0.0
+        }

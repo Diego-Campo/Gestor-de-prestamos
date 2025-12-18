@@ -185,3 +185,51 @@ htmlcov/
 # Documentation builds
 docs/_build/
 docs/build/
+
+# Gestor de Préstamos v2.0 Specific
+
+# Database files (old SQLite)
+*.db
+*.sqlite
+*.sqlite3
+gestor_prestamos.db
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+gestor_prestamos.log
+
+# Kivy
+.kivy/
+*.kv~
+
+# Buildozer (Android)
+.buildozer/
+bin/
+*.apk
+*.aab
+*.apks
+
+# Android
+.gradle/
+local.properties
+*.keystore
+*.jks
+
+# Docker volumes
+postgres_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backups
+*_old.py.bak
+*.md.bak
+README_v1.md.bak

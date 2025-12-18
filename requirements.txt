@@ -1,6 +1,23 @@
-# Dependencias de la aplicación Gestor de Préstamos
+# Dependencias de la aplicación Gestor de Préstamos v2.0.0
 # Para instalar todas las dependencias ejecutar: pip install -r requirements.txt
 
-PyQt6>=6.5.0
+# Base de datos PostgreSQL
+psycopg2-binary>=2.9.0
+
+# API REST
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Seguridad
 bcrypt>=4.0.0
 python-dotenv>=1.0.0
+
+# UI Multi-plataforma (Kivy)
+kivy>=2.2.0
+kivymd>=1.1.1
+
+# Herramientas de desarrollo
+pydantic>=2.0.0
+python-multipart>=0.0.6

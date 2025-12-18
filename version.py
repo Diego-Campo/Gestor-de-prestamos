@@ -1,16 +1,16 @@
 # Información de versión de la aplicación
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __app_name__ = "Gestor de Préstamos"
-__description__ = "Sistema de Gestión y Control de Préstamos"
+__description__ = "Sistema Multi-plataforma de Gestión y Control de Préstamos (Android/Windows)"
 __author__ = "Diego Campo"
 __email__ = "campoviverodiego@gmail.com"
 __url__ = "https://github.com/Diego-Campo/Gestor-de-prestamos"
 __license__ = "MIT"
   
 # Información de build
-__build_date__ = "2024-11-11"
-__python_version__ = "3.8+"
-__platform__ = "Windows"
+__build_date__ = "2025-12-18"
+__python_version__ = "3.9+"
+__platform__ = "Android, Windows"
 
 # Configuración de la aplicación
 APP_CONFIG = {
@@ -19,12 +19,18 @@ APP_CONFIG = {
     "description": __description__,
     "author": __author__,
     "license": __license__,
-    "min_python_version": "3.8.0",
-    "supported_platforms": ["Windows"],
+    "min_python_version": "3.9.0",
+    "supported_platforms": ["Android", "Windows"],
+    "architecture": "Client-Server (REST API)",
+    "database": "PostgreSQL 15+",
     "dependencies": [
-        "PyQt6>=6.5.0",
+        "kivy>=2.2.0",
+        "kivymd>=1.1.1",
+        "fastapi>=0.104.0",
+        "psycopg2-binary>=2.9.0",
         "bcrypt>=4.0.0", 
-        "python-dotenv>=1.0.0"
+        "python-dotenv>=1.0.0",
+        "requests>=2.31.0"
     ]
 }
 

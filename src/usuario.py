@@ -1,7 +1,15 @@
+"""
+Gestión de usuarios para PostgreSQL.
+
+Este módulo ha sido adaptado para funcionar con PostgreSQL
+en lugar de SQLite. Los métodos han sido refactorizados para
+usar psycopg2 y el pool de conexiones.
+"""
+
 import bcrypt
-import sqlite3
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Union, List
+from typing import Dict, Optional, List
+from psycopg2 import IntegrityError
 
 class Usuario:
     """
@@ -19,7 +27,7 @@ class Usuario:
         Inicializa el gestor de usuarios.
         
         Args:
-            db: Instancia de la clase Database para operaciones con la base de datos
+            db: Instancia de la clase Database (PostgreSQL) para operaciones con la base de datos
         """
         self.db = db
 
@@ -38,13 +46,12 @@ class Usuario:
         """
         hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         try:
-            self.db.cursor.execute('''
+            self.db.execute('''
                 INSERT INTO usuarios (username, password, nombre, es_admin)
-                VALUES (?, ?, ?, ?)
-            ''', (username, hashed, nombre, es_admin))
-            self.db.connection.commit()
+                VALUES (%s, %s, %s, %s)
+            ''', (username, hashed.decode('utf-8'), nombre, es_admin))
             return True
-        except sqlite3.IntegrityError:
+        except IntegrityError:
             return False
 
     def validar_usuario(self, username: str, password: str) -> Optional[int]:
@@ -58,74 +65,84 @@ class Usuario:
         Returns:
             Optional[int]: ID del usuario si las credenciales son válidas, None en caso contrario
         """
-        self.db.cursor.execute('SELECT id, password FROM usuarios WHERE username = ?', (username,))
-        user = self.db.cursor.fetchone()
-        if user and bcrypt.checkpw(password.encode('utf-8'), user[1]):
-            return user[0]
+        user = self.db.fetch_one(
+            'SELECT id, password FROM usuarios WHERE username = %s',
+            (username,)
+        )
+        if user and bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+            return user['id']
         return None
 
-    def registrar_base_semanal(self, usuario_id, monto):
+    def registrar_base_semanal(self, usuario_id: int, monto: float):
+        """Registra la base semanal de un cobrador."""
         fecha = datetime.now().date()
-        self.db.cursor.execute('''
+        self.db.execute('''
             INSERT INTO bases_semanales (usuario_id, monto, fecha)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         ''', (usuario_id, monto, fecha))
-        self.db.connection.commit()
 
-    def registrar_gasto(self, usuario_id, monto, descripcion):
+    def registrar_gasto(self, usuario_id: int, monto: float, descripcion: str):
+        """Registra un gasto operativo del cobrador."""
         fecha = datetime.now().date()
-        self.db.cursor.execute('''
+        self.db.execute('''
             INSERT INTO gastos_semanales (usuario_id, monto, descripcion, fecha)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
         ''', (usuario_id, monto, descripcion, fecha))
-        self.db.connection.commit()
 
-    def obtener_resumen_semanal(self, usuario_id):
+    def obtener_resumen_semanal(self, usuario_id: int) -> Dict:
+        """
+        Obtiene el resumen de actividad semanal del cobrador.
+        
+        Args:
+            usuario_id: ID del cobrador
+            
+        Returns:
+            Dict con base, cobrado, prestado, gastos, etc.
+        """
         fecha_actual = datetime.now().date()
         
         # Obtener base semanal
-        self.db.cursor.execute('''
+        base_result = self.db.fetch_one('''
             SELECT monto FROM bases_semanales 
-            WHERE usuario_id = ? AND fecha = ?
+            WHERE usuario_id = %s AND fecha = %s
         ''', (usuario_id, fecha_actual))
-        base = self.db.cursor.fetchone()
-        base = base[0] if base else 0
+        base = float(base_result['monto']) if base_result else 0.0
 
         # Obtener total cobrado
-        self.db.cursor.execute('''
-            SELECT SUM(p.monto)
+        cobrado_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(p.monto), 0) as total
             FROM pagos p
             JOIN clientes c ON p.cliente_id = c.id
-            WHERE c.usuario_id = ? AND p.fecha = ?
+            WHERE c.usuario_id = %s AND p.fecha = %s
         ''', (usuario_id, fecha_actual))
-        cobrado = self.db.cursor.fetchone()[0] or 0
+        cobrado = float(cobrado_result['total']) if cobrado_result else 0.0
 
         # Obtener total prestado y seguros
-        self.db.cursor.execute('''
-            SELECT SUM(monto_prestado), SUM(seguro)
+        prestado_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(monto_prestado), 0) as prestado,
+                   COALESCE(SUM(seguro), 0) as seguros
             FROM clientes
-            WHERE usuario_id = ? AND fecha_prestamo = ?
+            WHERE usuario_id = %s AND fecha_prestamo = %s
         ''', (usuario_id, fecha_actual))
-        result = self.db.cursor.fetchone()
-        prestado = result[0] or 0
-        seguros = result[1] or 0
+        prestado = float(prestado_result['prestado']) if prestado_result else 0.0
+        seguros = float(prestado_result['seguros']) if prestado_result else 0.0
 
         # Obtener gastos
-        self.db.cursor.execute('''
-            SELECT SUM(monto)
+        gastos_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(monto), 0) as total
             FROM gastos_semanales
-            WHERE usuario_id = ? AND fecha = ?
+            WHERE usuario_id = %s AND fecha = %s
         ''', (usuario_id, fecha_actual))
-        gastos = self.db.cursor.fetchone()[0] or 0
+        gastos = float(gastos_result['total']) if gastos_result else 0.0
 
         # Obtener pagos digitales
-        self.db.cursor.execute('''
-            SELECT SUM(p.monto)
+        digital_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(p.monto), 0) as total
             FROM pagos p
             JOIN clientes c ON p.cliente_id = c.id
-            WHERE c.usuario_id = ? AND p.fecha = ? AND p.tipo_pago = 'digital'
+            WHERE c.usuario_id = %s AND p.fecha = %s AND p.tipo_pago = 'digital'
         ''', (usuario_id, fecha_actual))
-        digital = self.db.cursor.fetchone()[0] or 0
+        digital = float(digital_result['total']) if digital_result else 0.0
 
         return {
             'base': base,
@@ -147,18 +164,14 @@ class Usuario:
         Returns:
             Optional[Dict]: Información del usuario o None si no existe
         """
-        self.db.cursor.execute('''
-            SELECT id, username, nombre 
+        usuario = self.db.fetch_one('''
+            SELECT id, username, nombre, es_admin
             FROM usuarios 
-            WHERE id = ?
+            WHERE id = %s
         ''', (usuario_id,))
-        usuario = self.db.cursor.fetchone()
+        
         if usuario:
-            return {
-                'id': usuario[0],
-                'username': usuario[1],
-                'nombre': usuario[2]
-            }
+            return dict(usuario)
         return None
 
     def eliminar_usuario(self, admin_id: int, usuario_id: int) -> bool:
@@ -173,20 +186,23 @@ class Usuario:
             bool: True si el usuario fue eliminado, False si no se pudo
         """
         # Verificar si quien ejecuta es administrador
-        self.db.cursor.execute('SELECT es_admin FROM usuarios WHERE id = ?', (admin_id,))
-        es_admin = self.db.cursor.fetchone()[0]
-        if not es_admin:
+        admin = self.db.fetch_one(
+            'SELECT es_admin FROM usuarios WHERE id = %s',
+            (admin_id,)
+        )
+        if not admin or not admin['es_admin']:
             return False
 
         # Verificar que no se intente eliminar un admin
-        self.db.cursor.execute('SELECT es_admin FROM usuarios WHERE id = ?', (usuario_id,))
-        usuario = self.db.cursor.fetchone()
-        if not usuario or usuario[0]:  # No existe o es admin
+        usuario = self.db.fetch_one(
+            'SELECT es_admin FROM usuarios WHERE id = %s',
+            (usuario_id,)
+        )
+        if not usuario or usuario['es_admin']:
             return False
             
         # Eliminar el usuario
-        self.db.cursor.execute('DELETE FROM usuarios WHERE id = ?', (usuario_id,))
-        self.db.connection.commit()
+        self.db.execute('DELETE FROM usuarios WHERE id = %s', (usuario_id,))
         return True
 
     def es_administrador(self, usuario_id: int) -> bool:
@@ -199,9 +215,11 @@ class Usuario:
         Returns:
             bool: True si es administrador, False si no
         """
-        self.db.cursor.execute('SELECT es_admin FROM usuarios WHERE id = ?', (usuario_id,))
-        resultado = self.db.cursor.fetchone()
-        return bool(resultado and resultado[0])
+        resultado = self.db.fetch_one(
+            'SELECT es_admin FROM usuarios WHERE id = %s',
+            (usuario_id,)
+        )
+        return bool(resultado and resultado['es_admin'])
 
     def obtener_actividad_cobrador(self, usuario_id: int, fecha: datetime = None) -> Dict:
         """
@@ -218,50 +236,49 @@ class Usuario:
             fecha = datetime.now().date()
 
         # Obtener información básica del cobrador
-        self.db.cursor.execute('''
+        usuario = self.db.fetch_one('''
             SELECT nombre, username, es_admin 
             FROM usuarios 
-            WHERE id = ?
+            WHERE id = %s
         ''', (usuario_id,))
-        usuario = self.db.cursor.fetchone()
         
         # Contar clientes activos
-        self.db.cursor.execute('''
-            SELECT COUNT(*) 
+        clientes_result = self.db.fetch_one('''
+            SELECT COUNT(*) as total
             FROM clientes 
-            WHERE usuario_id = ? AND estado = 'activo'
+            WHERE usuario_id = %s AND estado = 'activo'
         ''', (usuario_id,))
-        clientes_activos = self.db.cursor.fetchone()[0]
+        clientes_activos = clientes_result['total'] if clientes_result else 0
 
         # Obtener total prestado hoy
-        self.db.cursor.execute('''
-            SELECT SUM(monto_prestado)
+        prestado_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(monto_prestado), 0) as total
             FROM clientes
-            WHERE usuario_id = ? AND fecha_prestamo = ?
+            WHERE usuario_id = %s AND fecha_prestamo = %s
         ''', (usuario_id, fecha))
-        prestado_hoy = self.db.cursor.fetchone()[0] or 0
+        prestado_hoy = float(prestado_result['total']) if prestado_result else 0.0
 
         # Obtener total cobrado hoy
-        self.db.cursor.execute('''
-            SELECT SUM(p.monto)
+        cobrado_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(p.monto), 0) as total
             FROM pagos p
             JOIN clientes c ON p.cliente_id = c.id
-            WHERE c.usuario_id = ? AND p.fecha = ?
+            WHERE c.usuario_id = %s AND p.fecha = %s
         ''', (usuario_id, fecha))
-        cobrado_hoy = self.db.cursor.fetchone()[0] or 0
+        cobrado_hoy = float(cobrado_result['total']) if cobrado_result else 0.0
 
         # Obtener gastos de hoy
-        self.db.cursor.execute('''
-            SELECT SUM(monto)
+        gastos_result = self.db.fetch_one('''
+            SELECT COALESCE(SUM(monto), 0) as total
             FROM gastos_semanales
-            WHERE usuario_id = ? AND fecha = ?
+            WHERE usuario_id = %s AND fecha = %s
         ''', (usuario_id, fecha))
-        gastos_hoy = self.db.cursor.fetchone()[0] or 0
+        gastos_hoy = float(gastos_result['total']) if gastos_result else 0.0
 
         return {
-            'nombre': usuario[0],
-            'username': usuario[1],
-            'es_admin': usuario[2],
+            'nombre': usuario['nombre'],
+            'username': usuario['username'],
+            'es_admin': usuario['es_admin'],
             'clientes_activos': clientes_activos,
             'prestado_hoy': prestado_hoy,
             'cobrado_hoy': cobrado_hoy,
@@ -285,7 +302,42 @@ class Usuario:
         for i in range(dias):
             fecha = fecha_actual - timedelta(days=i)
             actividad = self.obtener_actividad_cobrador(usuario_id, fecha)
-            actividad['fecha'] = fecha
+            actividad['fecha'] = fecha.isoformat()
             historial.append(actividad)
             
         return historial
+
+    def cambiar_password(self, usuario_id: int, password_actual: str, password_nueva: str) -> bool:
+        """
+        Cambia la contraseña de un usuario.
+        
+        Args:
+            usuario_id: ID del usuario
+            password_actual: Contraseña actual
+            password_nueva: Nueva contraseña
+            
+        Returns:
+            bool: True si se cambió correctamente, False si la contraseña actual es incorrecta
+        """
+        # Validar contraseña actual
+        usuario = self.db.fetch_one(
+            'SELECT password FROM usuarios WHERE id = %s',
+            (usuario_id,)
+        )
+        
+        if not usuario:
+            return False
+            
+        if not bcrypt.checkpw(password_actual.encode('utf-8'), usuario['password'].encode('utf-8')):
+            return False
+        
+        # Hash de la nueva contraseña
+        new_hashed = bcrypt.hashpw(password_nueva.encode('utf-8'), bcrypt.gensalt())
+        
+        # Actualizar contraseña
+        self.db.execute(
+            'UPDATE usuarios SET password = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s',
+            (new_hashed.decode('utf-8'), usuario_id)
+        )
+        
+        return True
