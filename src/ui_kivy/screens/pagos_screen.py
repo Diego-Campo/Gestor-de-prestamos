@@ -38,15 +38,17 @@ class PagosScreen(MDScreen):
         header.add_widget(MDLabel(text="PAGOS", font_style="H6"))
         layout.add_widget(header)
         
-        # Botones de acción
+        # Botones de acción según el rol
         actions_box = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
         
-        btn_registrar = MDRaisedButton(
-            text="REGISTRAR",
-            size_hint_x=0.33,
-            on_release=self.show_registrar_pago
-        )
-        actions_box.add_widget(btn_registrar)
+        # Solo cobradores pueden registrar pagos
+        if not app.es_admin:
+            btn_registrar = MDRaisedButton(
+                text="REGISTRAR",
+                size_hint_x=0.33,
+                on_release=self.show_registrar_pago
+            )
+            actions_box.add_widget(btn_registrar)
         
         btn_historial = MDRaisedButton(
             text="HISTORIAL",
@@ -258,12 +260,20 @@ class PagosScreen(MDScreen):
             lista = MDList()
             
             for pago in data[:30]:  # Últimos 30 pagos
-                item = ThreeLineIconListItem(
-                    text=f"${pago.get('monto', 0):,.0f} - {pago.get('tipo_pago', 'N/A').upper()}",
-                    secondary_text=f"Cliente: {pago.get('cliente_nombre', 'N/A')}",
-                    tertiary_text=f"Fecha: {pago.get('fecha', 'N/A')}",
-                    on_release=lambda x, p=pago: self.confirm_delete_pago(p)
-                )
+                # Solo cobradores pueden eliminar (al hacer clic)
+                if app.es_admin:
+                    item = ThreeLineIconListItem(
+                        text=f"${pago.get('monto', 0):,.0f} - {pago.get('tipo_pago', 'N/A').upper()}",
+                        secondary_text=f"Cliente: {pago.get('cliente_nombre', 'N/A')}",
+                        tertiary_text=f"Fecha: {pago.get('fecha', 'N/A')}"
+                    )
+                else:
+                    item = ThreeLineIconListItem(
+                        text=f"${pago.get('monto', 0):,.0f} - {pago.get('tipo_pago', 'N/A').upper()}",
+                        secondary_text=f"Cliente: {pago.get('cliente_nombre', 'N/A')}",
+                        tertiary_text=f"Fecha: {pago.get('fecha', 'N/A')}",
+                        on_release=lambda x, p=pago: self.confirm_delete_pago(p)
+                    )
                 lista.add_widget(item)
             
             if not data:
@@ -280,8 +290,15 @@ class PagosScreen(MDScreen):
                 # Agregar total
                 total = sum(p.get('monto', 0) for p in data)
                 from kivymd.uix.label import MDLabel
+                
+                # Texto según el rol
+                if app.es_admin:
+                    footer_text = f"\nTotal: ${total:,.0f}\n(Vista de solo lectura)"
+                else:
+                    footer_text = f"\nTotal: ${total:,.0f}\n(Click en un pago para eliminarlo)"
+                
                 self.content_area.add_widget(MDLabel(
-                    text=f"\nTotal: ${total:,.0f}\n(Click en un pago para eliminarlo)",
+                    text=footer_text,
                     halign="center",
                     size_hint_y=None,
                     height=dp(80)

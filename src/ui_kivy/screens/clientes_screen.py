@@ -57,12 +57,14 @@ class ClientesScreen(MDScreen):
         )
         search_box.add_widget(filter_btn)
         
-        add_btn = MDRaisedButton(
-            text="+ NUEVO",
-            size_hint_x=0.3,
-            on_release=self.show_add_cliente
-        )
-        search_box.add_widget(add_btn)
+        # Botón de agregar solo para cobradores
+        if not app.es_admin:
+            add_btn = MDRaisedButton(
+                text="+ NUEVO",
+                size_hint_x=0.3,
+                on_release=self.show_add_cliente
+            )
+            search_box.add_widget(add_btn)
         layout.add_widget(search_box)
         
         # Variable para filtros
@@ -292,23 +294,29 @@ Saldo Pendiente: ${saldo:,.0f}
 Estado: {data.get('estado', 'activo').upper()}
 """
         
+        # Botones según el rol
         dialog_buttons = [
             MDFlatButton(text="CERRAR", on_release=lambda x: x.parent.parent.parent.parent.dismiss()),
             MDRaisedButton(
                 text="VER PAGOS",
                 on_release=lambda x: self.show_historial_pagos(data['id'])
-            ),
-            MDRaisedButton(
-                text="EDITAR",
-                md_bg_color=(0.2, 0.4, 0.6, 1),
-                on_release=lambda x: self.show_edit_cliente(data)
-            ),
-            MDRaisedButton(
-                text="ELIMINAR",
-                md_bg_color=(0.6, 0.2, 0.2, 1),
-                on_release=lambda x: self.confirm_delete_cliente(data)
             )
         ]
+        
+        # Solo cobradores pueden editar/eliminar
+        if not app.es_admin:
+            dialog_buttons.extend([
+                MDRaisedButton(
+                    text="EDITAR",
+                    md_bg_color=(0.2, 0.4, 0.6, 1),
+                    on_release=lambda x: self.show_edit_cliente(data)
+                ),
+                MDRaisedButton(
+                    text="ELIMINAR",
+                    md_bg_color=(0.6, 0.2, 0.2, 1),
+                    on_release=lambda x: self.confirm_delete_cliente(data)
+                )
+            ])
         
         MDDialog(
             title="Detalles del Cliente",

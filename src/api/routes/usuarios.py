@@ -260,3 +260,65 @@ async def delete_usuario(
         "success": True,
         "message": "Usuario eliminado exitosamente"
     }
+
+
+@router.get("/cobradores/resumen")
+async def get_resumen_cobradores(
+    current_user: dict = Depends(get_current_admin),
+    db=Depends(get_db)
+):
+    """Obtiene resumen de actividad de todos los cobradores (solo admin)."""
+    from datetime import date as dt_date
+    hoy = dt_date.today()
+    
+    # Obtener todos los cobradores (no admin)
+    cobradores = db.fetch_all(
+        'SELECT id, username, nombre FROM usuarios WHERE es_admin = FALSE ORDER BY nombre'
+    )
+    
+    resumen = []
+    for cobrador in cobradores:
+        cobrador_id = cobrador['id']
+        
+        # Clientes activos
+        clientes = db.fetch_one(
+            'SELECT COUNT(*) as total FROM clientes WHERE usuario_id = %s AND estado = %s',
+            (cobrador_id, 'activo')
+        )
+        
+        # Cobrado hoy
+        cobrado_hoy = db.fetch_one(
+            '''SELECT COALESCE(SUM(p.monto), 0) as total
+               FROM pagos p
+               JOIN clientes c ON p.cliente_id = c.id
+               WHERE c.usuario_id = %s AND p.fecha = %s''',
+            (cobrador_id, hoy)
+        )
+        
+        # Base del día
+        base_hoy = db.fetch_one(
+            '''SELECT COALESCE(SUM(monto), 0) as total
+               FROM bases_semanales
+               WHERE usuario_id = %s AND fecha = %s''',
+            (cobrador_id, hoy)
+        )
+        
+        # Gastos del día
+        gastos_hoy = db.fetch_one(
+            '''SELECT COALESCE(SUM(monto), 0) as total
+               FROM gastos_semanales
+               WHERE usuario_id = %s AND fecha = %s''',
+            (cobrador_id, hoy)
+        )
+        
+        resumen.append({
+            'id': cobrador_id,
+            'nombre': cobrador['nombre'],
+            'username': cobrador['username'],
+            'clientes_activos': clientes['total'] if clientes else 0,
+            'cobrado_hoy': float(cobrado_hoy['total']) if cobrado_hoy else 0.0,
+            'base_hoy': float(base_hoy['total']) if base_hoy else 0.0,
+            'gastos_hoy': float(gastos_hoy['total']) if gastos_hoy else 0.0
+        })
+    
+    return resumen

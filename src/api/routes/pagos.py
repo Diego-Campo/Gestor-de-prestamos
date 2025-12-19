@@ -79,17 +79,24 @@ async def list_pagos(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Lista todos los pagos del usuario actual con filtros opcionales."""
+    """Lista pagos. Admin ve todos, cobrador solo los suyos."""
     usuario_id = current_user['usuario_id']
+    es_admin = current_user.get('es_admin', False)
     
     # Construir query dinámicamente según filtros
     query = '''
         SELECT p.id, p.cliente_id, p.fecha, p.monto, p.tipo_pago, c.nombre as cliente_nombre
         FROM pagos p
         JOIN clientes c ON p.cliente_id = c.id
-        WHERE c.usuario_id = %s
     '''
-    params = [usuario_id]
+    
+    # Si no es admin, solo mostrar sus pagos
+    if not es_admin:
+        query += ' WHERE c.usuario_id = %s'
+        params = [usuario_id]
+    else:
+        query += ' WHERE 1=1'
+        params = []
     
     if cliente_id:
         query += ' AND p.cliente_id = %s'
@@ -217,30 +224,49 @@ async def get_resumen_hoy(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Obtiene el resumen de cobros del día actual."""
+    """Obtiene el resumen de cobros del día. Admin ve el total de todos."""
     usuario_id = current_user['usuario_id']
+    es_admin = current_user.get('es_admin', False)
     fecha_hoy = date.today()
     
     # Total cobrado hoy
-    result = db.fetch_one(
-        '''SELECT 
-            COALESCE(SUM(CASE WHEN p.tipo_pago = 'efectivo' THEN p.monto ELSE 0 END), 0) as efectivo,
-            COALESCE(SUM(CASE WHEN p.tipo_pago = 'digital' THEN p.monto ELSE 0 END), 0) as digital,
-            COALESCE(SUM(p.monto), 0) as total,
-            COUNT(p.id) as num_pagos
-           FROM pagos p
-           JOIN clientes c ON p.cliente_id = c.id
-           WHERE c.usuario_id = %s AND p.fecha = %s''',
-        (usuario_id, fecha_hoy)
-    )
+    if es_admin:
+        result = db.fetch_one(
+            '''SELECT 
+                COALESCE(SUM(CASE WHEN p.tipo_pago = 'efectivo' THEN p.monto ELSE 0 END), 0) as efectivo,
+                COALESCE(SUM(CASE WHEN p.tipo_pago = 'digital' THEN p.monto ELSE 0 END), 0) as digital,
+                COALESCE(SUM(p.monto), 0) as total,
+                COUNT(p.id) as num_pagos
+               FROM pagos p
+               WHERE p.fecha = %s''',
+            (fecha_hoy,)
+        )
+    else:
+        result = db.fetch_one(
+            '''SELECT 
+                COALESCE(SUM(CASE WHEN p.tipo_pago = 'efectivo' THEN p.monto ELSE 0 END), 0) as efectivo,
+                COALESCE(SUM(CASE WHEN p.tipo_pago = 'digital' THEN p.monto ELSE 0 END), 0) as digital,
+                COALESCE(SUM(p.monto), 0) as total,
+                COUNT(p.id) as num_pagos
+               FROM pagos p
+               JOIN clientes c ON p.cliente_id = c.id
+               WHERE c.usuario_id = %s AND p.fecha = %s''',
+            (usuario_id, fecha_hoy)
+        )
     
     # Clientes activos
-    clientes_activos = db.fetch_one(
-        '''SELECT COUNT(*) as total
-           FROM clientes
-           WHERE usuario_id = %s AND estado = 'activo' ''',
-        (usuario_id,)
-    )
+    if es_admin:
+        clientes_activos = db.fetch_one(
+            '''SELECT COUNT(*) as total
+               FROM clientes
+               WHERE estado = 'activo' ''')
+    else:
+        clientes_activos = db.fetch_one(
+            '''SELECT COUNT(*) as total
+               FROM clientes
+               WHERE usuario_id = %s AND estado = 'activo' ''',
+            (usuario_id,)
+        )
     
     return {
         "fecha": fecha_hoy.isoformat(),
@@ -257,40 +283,63 @@ async def get_resumen_semanal(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Obtiene el resumen de cobros de la semana actual."""
+    """Obtiene el resumen de cobros de la semana. Admin ve el total de todos."""
     usuario_id = current_user['usuario_id']
+    es_admin = current_user.get('es_admin', False)
     
     # Obtener cobros de la semana
-    result = db.fetch_one(
-        '''SELECT 
-            COALESCE(SUM(CASE WHEN p.tipo_pago = 'efectivo' THEN p.monto ELSE 0 END), 0) as efectivo,
-            COALESCE(SUM(CASE WHEN p.tipo_pago = 'digital' THEN p.monto ELSE 0 END), 0) as digital,
-            COALESCE(SUM(p.monto), 0) as total,
-            COUNT(DISTINCT p.cliente_id) as clientes_pagaron
-           FROM pagos p
-           JOIN clientes c ON p.cliente_id = c.id
-           WHERE c.usuario_id = %s 
-           AND p.fecha >= DATE_TRUNC('week', CURRENT_DATE)''',
-        (usuario_id,)
-    )
+    if es_admin:
+        result = db.fetch_one(
+            '''SELECT 
+                COALESCE(SUM(CASE WHEN p.tipo_pago = 'efectivo' THEN p.monto ELSE 0 END), 0) as efectivo,
+                COALESCE(SUM(CASE WHEN p.tipo_pago = 'digital' THEN p.monto ELSE 0 END), 0) as digital,
+                COALESCE(SUM(p.monto), 0) as total,
+                COUNT(DISTINCT p.cliente_id) as clientes_pagaron
+               FROM pagos p
+               WHERE p.fecha >= DATE_TRUNC('week', CURRENT_DATE)''')
+    else:
+        result = db.fetch_one(
+            '''SELECT 
+                COALESCE(SUM(CASE WHEN p.tipo_pago = 'efectivo' THEN p.monto ELSE 0 END), 0) as efectivo,
+                COALESCE(SUM(CASE WHEN p.tipo_pago = 'digital' THEN p.monto ELSE 0 END), 0) as digital,
+                COALESCE(SUM(p.monto), 0) as total,
+                COUNT(DISTINCT p.cliente_id) as clientes_pagaron
+               FROM pagos p
+               JOIN clientes c ON p.cliente_id = c.id
+               WHERE c.usuario_id = %s 
+               AND p.fecha >= DATE_TRUNC('week', CURRENT_DATE)''',
+            (usuario_id,)
+        )
     
     # Gastos de la semana
-    gastos = db.fetch_one(
-        '''SELECT COALESCE(SUM(monto), 0) as total
-           FROM gastos_semanales
-           WHERE usuario_id = %s
-           AND fecha >= DATE_TRUNC('week', CURRENT_DATE)''',
-        (usuario_id,)
-    )
+    if es_admin:
+        gastos = db.fetch_one(
+            '''SELECT COALESCE(SUM(monto), 0) as total
+               FROM gastos_semanales
+               WHERE fecha >= DATE_TRUNC('week', CURRENT_DATE)''')
+    else:
+        gastos = db.fetch_one(
+            '''SELECT COALESCE(SUM(monto), 0) as total
+               FROM gastos_semanales
+               WHERE usuario_id = %s
+               AND fecha >= DATE_TRUNC('week', CURRENT_DATE)''',
+            (usuario_id,)
+        )
     
     # Base semanal
-    base = db.fetch_one(
-        '''SELECT COALESCE(SUM(monto), 0) as total
-           FROM bases_semanales
-           WHERE usuario_id = %s
-           AND fecha >= DATE_TRUNC('week', CURRENT_DATE)''',
-        (usuario_id,)
-    )
+    if es_admin:
+        base = db.fetch_one(
+            '''SELECT COALESCE(SUM(monto), 0) as total
+               FROM bases_semanales
+               WHERE fecha >= DATE_TRUNC('week', CURRENT_DATE)''')
+    else:
+        base = db.fetch_one(
+            '''SELECT COALESCE(SUM(monto), 0) as total
+               FROM bases_semanales
+               WHERE usuario_id = %s
+               AND fecha >= DATE_TRUNC('week', CURRENT_DATE)''',
+            (usuario_id,)
+        )
     
     return {
         "efectivo": float(result['efectivo']),

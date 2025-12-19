@@ -67,30 +67,54 @@ class ClienteDetalladoResponse(ClienteResponse):
 async def list_clientes(
     estado: Optional[str] = Query(None, description="Filtrar por estado: activo, pagado, atrasado"),
     search: Optional[str] = Query(None, description="Buscar por nombre o cédula"),
+    usuario_id: Optional[int] = Query(None, description="Filtrar por cobrador (solo admin)"),
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Lista todos los clientes del usuario actual."""
-    usuario_id = current_user['usuario_id']
+    """Lista todos los clientes. Admin ve todos, cobrador solo los suyos."""
+    current_usuario_id = current_user['usuario_id']
+    es_admin = current_user.get('es_admin', False)
     
-    # Construir query con filtros
-    query = '''SELECT id, usuario_id, nombre, cedula, telefono, monto_prestado,
-                      fecha_prestamo, tipo_plazo, tasa_interes, seguro, cuota_minima,
-                      dias_plazo, estado
-               FROM clientes
-               WHERE usuario_id = %s'''
-    params = [usuario_id]
+    # Construir query con filtros (incluye total pagado)
+    query = '''SELECT c.id, c.usuario_id, c.nombre, c.cedula, c.telefono, c.monto_prestado,
+                      c.fecha_prestamo, c.tipo_plazo, c.tasa_interes, c.seguro, c.cuota_minima,
+                      c.dias_plazo, c.estado,
+                      COALESCE(SUM(p.monto), 0) as total_pagado
+               FROM clientes c
+               LEFT JOIN pagos p ON c.id = p.cliente_id'''
+    
+    # Construir condiciones WHERE
+    conditions = []
+    params = []
+    
+    # Si no es admin, solo mostrar sus clientes
+    if not es_admin:
+        conditions.append('c.usuario_id = %s')
+        params.append(current_usuario_id)
+    else:
+        # Admin: si se especifica usuario_id, filtrar por ese cobrador
+        if usuario_id:
+            conditions.append('c.usuario_id = %s')
+            params.append(usuario_id)
     
     if estado:
-        query += ' AND estado = %s'
+        conditions.append('c.estado = %s')
         params.append(estado)
     
     if search:
-        query += ' AND (nombre ILIKE %s OR cedula ILIKE %s)'
+        conditions.append('(c.nombre ILIKE %s OR c.cedula ILIKE %s)')
         search_pattern = f'%{search}%'
         params.extend([search_pattern, search_pattern])
     
-    query += ' ORDER BY fecha_prestamo DESC'
+    # Agregar WHERE si hay condiciones
+    if conditions:
+        query += ' WHERE ' + ' AND '.join(conditions)
+    
+    # Agregar GROUP BY y ORDER BY
+    query += ''' GROUP BY c.id, c.usuario_id, c.nombre, c.cedula, c.telefono, c.monto_prestado,
+                         c.fecha_prestamo, c.tipo_plazo, c.tasa_interes, c.seguro, c.cuota_minima,
+                         c.dias_plazo, c.estado
+                 ORDER BY c.fecha_prestamo DESC'''
     
     clientes = db.fetch_all(query, tuple(params))
     
@@ -103,18 +127,29 @@ async def get_cliente(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Obtiene información detallada de un cliente."""
+    """Obtiene información detallada de un cliente. Admin puede ver cualquier cliente."""
     usuario_id = current_user['usuario_id']
+    es_admin = current_user.get('es_admin', False)
     
     # Obtener cliente
-    cliente = db.fetch_one(
-        '''SELECT id, usuario_id, nombre, cedula, telefono, monto_prestado,
-                  fecha_prestamo, tipo_plazo, tasa_interes, seguro, cuota_minima,
-                  dias_plazo, estado
-           FROM clientes
-           WHERE id = %s AND usuario_id = %s''',
-        (cliente_id, usuario_id)
-    )
+    if es_admin:
+        cliente = db.fetch_one(
+            '''SELECT id, usuario_id, nombre, cedula, telefono, monto_prestado,
+                      fecha_prestamo, tipo_plazo, tasa_interes, seguro, cuota_minima,
+                      dias_plazo, estado
+               FROM clientes
+               WHERE id = %s''',
+            (cliente_id,)
+        )
+    else:
+        cliente = db.fetch_one(
+            '''SELECT id, usuario_id, nombre, cedula, telefono, monto_prestado,
+                      fecha_prestamo, tipo_plazo, tasa_interes, seguro, cuota_minima,
+                      dias_plazo, estado
+               FROM clientes
+               WHERE id = %s AND usuario_id = %s''',
+            (cliente_id, usuario_id)
+        )
     
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
